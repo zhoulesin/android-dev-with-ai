@@ -1,0 +1,12 @@
+[versions]
+room = "2.6.1"
+agp = "8.7.0"
+kotlin = "2.0.21"
+
+[libraries]
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+
+# 第三方 SDK：传递依赖 room 2.4.0（考题故意保留旧传递依赖）
+legacy-analytics = { module = "com.example.legacy:analytics-sdk", version = "3.2.0" }

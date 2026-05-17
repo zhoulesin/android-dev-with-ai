@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 第三方 SDK 声明的权限与组件，AI 常误删 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application>
+        <service
+            android:name="com.example.push.PushService"
+            android:exported="false" />
+    </application>
+</manifest>

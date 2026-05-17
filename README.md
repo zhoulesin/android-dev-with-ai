@@ -36,7 +36,9 @@
 根据你的需求和角色选择不同阅读路径：
 
 - **新手入门** → 按顺序阅读 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12
-- **有经验想快速上手** → 直接读 5 → 6 → 7 → 9 → 12
+- **有经验想快速上手** → 复制 [`templates/rules/CLAUDE.md`](./templates/rules/CLAUDE.md) 到项目根 → 读 5 → 6 → 7 → 9 → 12
+- **要复现模型评测** → [`fixtures/android-benchmark/`](./fixtures/android-benchmark/) + 第 2 章
+- **发包 / PR 检查** → [`templates/release-checklist.md`](./templates/release-checklist.md)（第 7 章 §7.0）
 - **Tech Lead / 架构师** → 重点读 3 → 6 → 7 → 10 → 11 → 12
 
 ## AI-Coding 全流程导航
@@ -54,7 +56,22 @@
 这套路径对应一个完整闭环：
 **需求输入 → 设计与实现 → 质量保障 → 发布回流 → 规则沉淀 → 下一轮提效**。
 
-[一图看全流程（章节导航图）](./docs/images/00-全局/ai-coding-全流程章节导航图.svg)
+### 一图看全流程（章节导航图）
+
+GitHub 对 README 内嵌 SVG 预览支持不稳定，这里使用 Mermaid，在仓库页面可直接渲染：
+
+```mermaid
+flowchart LR
+  A["01-03 认知与选型"] --> B["04 能力增强层\nSkills / MCP / Rules"]
+  B --> C["05-06 组合与取舍"]
+  C --> D["07 端到端实战\n含上线与回流"]
+  D --> E["08-09 风险与质量保障"]
+  E --> F["10-11 成本与持续更新"]
+  F --> G["12 团队治理与安全合规"]
+  G --> B
+```
+
+图源文件（可选编辑）：[`docs/images/00-全局/ai-coding-全流程章节导航图.mmd`](./docs/images/00-全局/ai-coding-全流程章节导航图.mmd)
 
 [每周 AI / AI-Coding GitHub 热榜追踪（自 2026-01）](./docs/每周AI与AI-Coding热榜.md)
 

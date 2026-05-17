@@ -321,6 +321,8 @@ Skills 和 MCP 都依赖于一个前提：**AI 知道你项目是什么。**
 
 如果你每次对话都要解释"我这个项目用 Hilt，用 Moshi，用 Room，Min SDK 是 26"——那 Skills 再好用也白搭。这就是 CLAUDE.md（或 AGENTS.md）要做的事。
 
+**开箱即用模板（推荐直接复制）：** 仓库已提供 [`templates/rules/CLAUDE.md`](../templates/rules/CLAUDE.md)，覆盖 Compose、Hilt、Room、Navigation、DataStore、Gradle 等约束；每条带 **Why** 与 **不这样会出什么 Bug**。用法见 [`templates/rules/README.md`](../templates/rules/README.md)。
+
 **CLAUDE.md 是项目宪法。** 不是给 AI 的可选参考，而是每次对话自动注入的基础上下文。
 
 ### Skills 和 Rules 的区别，一句话讲清楚
@@ -330,9 +332,9 @@ Skills 和 MCP 都依赖于一个前提：**AI 知道你项目是什么。**
 
 举个例子：AI 读到 CLAUDE.md 里的"项目使用 Compose + Hilt"，知道了"我是谁"。你接着说"帮我写个登录页"，Compose-review Skill 被触发，告诉 AI "该怎么正确地写这个登录页。"两者缺一不可。
 
-### 一份能用的 Android 项目 CLAUDE.md 模板
+### 一份能用的 Android 项目 CLAUDE.md 模板（节选）
 
-下面这份是我实际在用、经过验证的模板。我把每一段的用意标出来，方便你按自己的项目改：
+完整版请用上一节的 [`templates/rules/CLAUDE.md`](../templates/rules/CLAUDE.md)。下面保留**节选 + 注释示例**，方便理解各段在文件里长什么样：
 
 ```markdown
 # Project: [项目名]

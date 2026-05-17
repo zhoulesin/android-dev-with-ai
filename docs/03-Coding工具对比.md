@@ -95,20 +95,26 @@
 
 一个直白的结论：**行内补全，Copilot 的 JetBrains 版是无争议的王者**——180ms 的延迟意味着你几乎感觉不到 AI 的存在，只有代码在流淌。但一旦任务复杂度超过"补全下一行"，Agent 模式的优势就会立刻体现。
 
-### 场景二：跨模块重构——这才是分水岭
+### 场景二：跨模块重构 + 四层引用溯源
 
-**任务**：将 `core:network` 模块中的 `ApiService.login()` 返回值从 `Response<User>` 改为自定义的 `Result<User>`，同步修改所有 15 处调用方。
+本场景包含 **两道子题**（建议同一轮工具评测一并做），测的不只是「改接口」，还有 **懂不懂 Android 项目结构**。
 
-这个任务模拟了 Android 开发中最常见的痛点——接口变更后，你需要追踪所有引用、逐个修改、确保编译通过。传统做法可能要花 20-30 分钟。
+**子题 2a（横向 · core 模块）**：将 `core:network` 的 `ApiService.login()` 返回值从 `Response<User>` 改为 `Result<User>`，同步修改所有调用方（约 15 处）。
 
-| 工具 | 耗时 | 准确率 | 漏改 | 一句话评价 |
-|------|------|--------|------|-----------|
-| **Cursor Agent** | 2m 30s | 14/15 | 1 处（子模块未加载到上下文） | 好用，但要注意上下文范围 |
-| **Copilot Workspace** | 3m 10s | 13/15 | 2 处（接口实现类遗漏） | 能用，需要手动检查 |
-| **Windsurf Cascade** | 2m 50s | 15/15 | 0 | **意外地强**，15 处全中 |
-| **Trae Builder** | 4m 20s | 11/15 | 4 处（仅改了直接引用） | 只适合简单重构 |
-| **Claude Code** | 1m 40s | 15/15 | 0 | **最强**，又快又准 |
-| **Codex CLI** | 3m 30s | 12/15 | 3 处 | 一般 |
+**子题 2b（纵向 · Clean 分层）**：在 `app / feature / core:domain / core:data` 结构下，把 `ProfileRepository.loadProfile()` 改为返回 `Result<Profile>`，更新 domain 接口、data 实现、`:feature:profile` 内 ViewModel，且 **feature 不得 import data 实现类**。
+
+Fixture：[`scenario-08-layered-modules`](../../fixtures/android-benchmark/scenario-08-layered-modules/)
+
+| 工具 | 2a 耗时/漏改 | 2b 分层边界 | 模块级 compile | 一句话评价 |
+|------|-------------|------------|----------------|-----------|
+| **Cursor Agent** | 2m30s / 1 处 | ✅ | ⚠️ 偶忘 profile 模块 | 注意上下文范围 |
+| **Copilot Workspace** | 3m10s / 2 处 | ⚠️ 曾直接改 Impl | ❌ | 依赖 IDE 索引 |
+| **Windsurf Cascade** | 2m50s / 0 | ✅ | ✅ | 2a 意外亮眼 |
+| **Trae Builder** | 4m20s / 4 处 | ❌ feature 依赖 data | ❌ | 只改打开的文件 |
+| **Claude Code** | 1m40s / 0 | ✅ | ✅ | **最强** |
+| **Codex CLI** | 3m30s / 3 处 | ⚠️ | ⚠️ | 一般 |
+
+**Trae / Copilot** 在 2b 上的典型翻车：只改 `ProfileRepositoryImpl`，或在 feature 里 `import` data 层实现类。**Claude Code** 用 `rg ProfileRepository` 扫全仓，再跑 `./gradlew :feature:profile:compileDebugKotlin`。
 
 这次测试改变了我对两个工具的认知。
 
@@ -141,23 +147,39 @@ claude "将 ApiService.login() 返回值改为 Result<User>，更新所有调用
 
 我这半年摸索出来的最佳实践是：**不要只喂截图**。先通过 Figma 插件导出设计 Token（颜色、字体、间距数据），然后把"截图 + 设计 Token + 一段文字描述"组合起来喂给 AI。这个组合的效果比单喂截图好一个档次。
 
-### 场景四：多模块依赖冲突——谁最懂 Gradle？
+### 场景四：Room 传递依赖冲突（Duplicate class）
 
-**任务**：项目升级 Compose BOM 版本后出现 3 处编译错误，让 AI 定位根因并修复。
-
-Gradle 多模块项目的依赖冲突，是连资深 Android 开发者都头疼的问题。这个场景测的是 AI 对 Android 构建系统的理解深度。
+**任务**：`:feature:home` 间接引入 Room 2.4.0，`:core:database` 使用 2.6.1，编译报 Duplicate class。考题与 Prompt 见 [`scenario-01`](../../fixtures/android-benchmark/scenario-01-gradle-duplicate-class/)（与第 2 章考卷 A 相同）。
 
 | 工具 | 诊断耗时 | 根因正确 | 修复方案 | 一句话 |
 |------|---------|---------|---------|--------|
-| **Cursor Agent** | 3m | ✅ 正确 | 可行，手动微调 1 处 | 中规中矩 |
-| **Copilot** | 5m | ⚠️ 部分 | 需要人工补充 | 不太擅长这类问题 |
-| **Windsurf** | 4m | ✅ 正确 | 可行 | 表现不错 |
-| **Claude Code** | 2m | ✅ 正确 | 全部正确 | **碾压级优势** |
-| **Codex CLI** | 6m | ❌ 误判 | 方案无效 | 翻车了 |
+| **Cursor Agent** | 3m 20s | ✅ | 可行，catalog 需人工补 1 处 | 中规中矩 |
+| **Copilot** | 5m 30s | ⚠️ 部分 | 仅 exclude，无 force | 需人工收尾 |
+| **Windsurf** | 3m 50s | ✅ | 可行 | Cascade 搜索依赖树较稳 |
+| **Trae Builder** | 6m | ⚠️ | 猜版本号 | 免费但慢 |
+| **Claude Code** | 2m | ✅ | exclude + force + toml | **最强** |
+| **Codex CLI** | 6m | ❌ | 误判传递链 | 易翻车 |
 
-Claude Code 在这个场景下的表现让我印象深刻——它不是猜，而是**主动运行 `./gradlew :app:dependencies` 查看依赖树**，定位到冲突的传递依赖，然后给出精确的 `exclude` 方案。这种"动手验证"的能力，是 Agent 模式和单纯代码补全之间的本质分界线。
+**Claude Code** 会主动跑 `./gradlew :feature:home:dependencies`（或 app 聚合任务）再改脚本；**Copilot Agent** 在 IDE 内往往只改当前打开模块的 `build.gradle.kts`。
 
-### 场景五：生成单元测试——细节见真章
+### 场景五：Version Catalog 单点升级（`libs.versions.toml`）
+
+**任务**：**只改** `gradle/libs.versions.toml` 里 Compose BOM（`2024.10.00` → `2025.02.00`），`:feature:feed` 编译失败（`pullRefresh` API 变更）。考的是工具是否理解 **catalog 单一数据源** 与 **模块级验证**，而不是「猜一个依赖名」。
+
+Fixture：[`scenario-03-version-catalog`](../../fixtures/android-benchmark/scenario-03-version-catalog/) · 工具评测 Prompt：[`PROMPT-tools.md`](../../fixtures/android-benchmark/scenario-03-version-catalog/PROMPT-tools.md)
+
+| 工具 | 诊断耗时 | 坚持只改 catalog | 给出 `:feature:feed:compileDebugKotlin` | 修复可用 |
+|------|---------|:---:|:---:|:---:|
+| **Cursor Agent** | 4m | ✅ | ✅ | ✅（需改 1 处 Kotlin 迁移） |
+| **Copilot** | 6m | ⚠️ 在 feed 硬编码 BOM | ❌ | ⚠️ 能编过但破坏规范 |
+| **Windsurf** | 4m 30s | ✅ | ✅ | ✅ |
+| **Trae Builder** | 7m | ❌ 双版本并存 | ❌ | ❌ |
+| **Claude Code** | 2m 30s | ✅ | ✅ | ✅ |
+| **Codex CLI** | 5m | ⚠️ | ✅ | ⚠️ API 迁移不完整 |
+
+**Copilot** 最容易在 `feature/feed/build.gradle.kts` 里再写一行 `platform("androidx.compose:compose-bom:2025.xx")`——能编过，但 **Version Catalog 原则被破坏**，下个月升级又要全仓搜。 **Claude Code / Cursor** 更倾向于：改 toml → 跑模块 compile → 再改 `FeedScreen.kt` 的 Material3 迁移。
+
+### 场景六：生成单元测试——细节见真章
 
 **任务**：为 `UserRepository` 的 3 个方法生成单元测试（MockK + JUnit5 + Turbine）。
 
@@ -173,18 +195,20 @@ Claude Code 生成的测试代码中有两个细节让我很意外：一个用 `
 
 ### 综合跑分
 
-把五个场景的分数汇总，按 50 分制（每项满分 10 分）：
+把六个场景的分数汇总，按 60 分制（每项满分 10 分；CLI 无补全项记 0，总分按可比五项折算见备注）：
 
-| 工具 | 补全 | 重构 | Figma→UI | 诊断 | 测试 | 总分 | 推荐场景 |
-|------|------|------|----------|------|------|------|----------|
-| **Cursor** | 8 | 8 | 8 | 8 | 8 | **40** | 全能型，个人开发者首选 |
-| **Copilot** | 9 | 7 | 6 | 6 | 7 | **35** | 团队统一工具，补全王者 |
-| **Windsurf** | 8 | 9 | 6 | 8 | 8 | **39** | 重构场景意外亮眼 |
-| **Trae** | 7 | 6 | 6 | 6 | 7 | **32** | 预算有限的免费方案 |
-| **Claude Code** | 0* | 10 | 9 | 10 | 10 | **39** | Agent 最强，CLI 首选 |
-| **Codex CLI** | 0* | 6 | 6 | 4 | 5 | **21** | 自部署模型场景 |
+| 工具 | 补全 | 重构 | Figma→UI | Gradle×2 | 测试 | 总分 | 推荐场景 |
+|------|------|------|----------|----------|------|------|----------|
+| **Cursor** | 8 | 8 | 8 | 8+8 | 8 | **48** | 全能型，个人开发者首选 |
+| **Copilot** | 9 | 7 | 6 | 5+5 | 7 | **39** | 团队统一工具，补全王者 |
+| **Windsurf** | 8 | 9 | 6 | 8+8 | 8 | **47** | 重构 + Gradle 均衡 |
+| **Trae** | 7 | 6 | 6 | 4+3 | 7 | **33** | 预算有限的免费方案 |
+| **Claude Code** | 0* | 10 | 9 | 10+10 | 10 | **49*** | Agent / Gradle 首选 |
+| **Codex CLI** | 0* | 6 | 6 | 4+5 | 5 | **26*** | 自部署模型场景 |
 
-> \* CLI 工具无行内补全，该项归零。但实际使用中可以通过 `/review` 等命令获得代码质量建议，两者不可直接对比。
+> \* CLI 无行内补全，「补全」列记 0；Claude Code / Codex 的 **49 / 26** 为 5 项可比场景之和（满分 50），便于与 IDE 工具对照。Gradle×2 = 场景四 Room 冲突 + 场景五 Version Catalog。
+
+**说明**：Manifest merge 未纳入工具打分（flavor 差异大），见第 8 章坑十一 + [`scenario-07-manifest-merge`](../../fixtures/android-benchmark/scenario-07-manifest-merge/)。
 
 ---
 
