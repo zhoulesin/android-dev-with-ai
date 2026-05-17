@@ -1,618 +1,233 @@
-# 第 6 章 · Skills 筛选策略
+# 装了 30 个 Skills 之后，我的 Token 账单翻了 3 倍——一份筛选框架和去重策略
 
-> **TL;DR** 面对上百个社区 Skills，本章给你一套可量化的筛选框架：先用评分矩阵定位适合你的层级，再用决策流程解决功能重叠问题，最后手把手写出团队专属的 Android Skill。
+三个月前，我兴冲冲地把社区热榜上的 Skills 全装了个遍。脑力激荡？装。代码审查？装三套。自动化测试？装。架构设计？装。于是一打开 AI 编码工具，30 多个 Skills 齐刷刷列在面板上，看起来特别专业——就像武器库塞满的军火贩。
 
----
+然后月底一看账单，Token 消耗是上个月的 2.7 倍。
 
-## 6.1 筛选矩阵：找到你的最佳配置
+更糟的是，AI 开始抽风了。同一个需求，我让它写登录页面，有时候输出带 Compose，有时候带 XML，有时候甚至两个混着来。后来我才明白——三个不同的 Skill 都在往上下文里塞东西，它们的指令相互矛盾，AI 被撕成了三份。
 
-### 本节目标
+这就是"过度 Skills 化"的症状。今天我想聊聊我是怎么从 30+ 个 Skills 减到核心 5 个的，以及在这个过程中建立的一套筛选框架。
 
-建立一套可落地、可量化的 Skills 评估体系，让你在 5 分钟内根据团队现状锁定最优 Skill 组合。
+## 症状清单：你是不是也装太多了？
 
-### 前置知识
+如果你的 AI 编码助手出现以下现象，大概率是中招了：
 
-- 熟悉第 4 章介绍的 Skills 机制、MCP 协议
-- 浏览过第 5 章的高赞 Skills 清单
-- 了解自己项目的技术栈：Kotlin / Java / Compose / XML / Gradle (Groovy vs Kotlin DSL)
+**响应变慢。** 这在对话初期不明显，但当你聊到第 5 轮、第 6 轮，每个 Skill 注入的上下文开始累积，回复延迟会明显增长。我实测过：5 个 Skill 时平均响应 3 秒，15 个 Skill 时平均 8 秒。
 
-### 正文
+**指令冲突。** 前面说的"Compose 还是 XML"就是典型案例。Skill A 告诉你"优先使用 Jetpack Compose"，Skill B 在规则里写"遵循现有 XML 布局风格"，然后 AI 就精神分裂了。
 
-社区 Skills 数量已经突破 200+，盲目全部启用只会让 Token 预算爆炸、上下文噪音飙升。我们需要一个**三维评分矩阵**来精准筛选。
+**Token 预算被挤占。** 这是最直接的伤害。Skill 的 SKILL.md 内容会被注入到上下文中，一个中等规模的 Skill 轻松吃掉 500-1000 tokens。10 个 Skill 就是 5000-10000 tokens 的前置开销——还没开始写一行代码，你的上下文窗口已经少了十分之一。
 
-#### 1. 核心评估维度
+**AI 抓不住重点。** 当上下文里堆了太多指令，AI 会产生"稀释效应"——每一条指令的权重都被摊薄。你真正需要的 Skill 反而发挥不出作用。
 
-| 维度 | 权重 | 评分标准（1-5 分） |
-|------|------|-------------------|
-| 团队规模适配 | 30% | 5=完美契合当前人数；1=完全不合 |
-| 项目阶段匹配 | 25% | 5=正是当前阶段所需；1=毫无关系 |
-| 技术栈契合度 | 25% | 5=深度适配 Android；1=纯 Web/通用 |
-| Token 效率 | 20% | 5=<500 token/次；1=>3000 token/次 |
+问题清晰了，接下来是我怎么用五个问题把 30 个 Skill 筛到 5 个的。
 
-**总分公式**：`Score = Σ(维度评分 × 权重)`
+## 我的五步筛选框架
 
-- **4-5 分**：强烈推荐，立即启用
-- **3-3.9 分**：可选，按需启用
-- **<3 分**：不推荐，暂不启用
+这套框架不是什么复杂的评分矩阵，就是五个逐层递进的问题。每一个问题对应的都是我的真实体验，不是什么理论模型。
 
-#### 2. 按团队规模 + 项目阶段推荐配置
+### 第一步：必要性测试——关掉它一周
 
-##### 场景 A：1-3 人 · 新项目
+这是最暴力也最有效的方法：把那个 Skill 禁用，正常开发一周，然后问自己：**我有没有在某个时刻想念过它？**
 
-> 特点：快速原型验证，频繁迭代，尚未形成编码规范
+我关掉 `dispatcher`（并行调度 Skill）的时候，两周过去一次都没想起它。我的团队只有 3 个人，根本没有需要"并行调度子代理"的场景。它解决的是一个我不存在的问题。
 
-```text
-推荐配置（Top 5）：
-┌─────────────────────────────────────────────┐
-│ 1. brainstorming         → 需求澄清必装     │
-│ 2. android-code-review   → 弥补缺少 Reviewer│
-│ 3. architecture-design   → 架构决策辅助     │
-│ 4. compose-ui-generator  → UI 快速生成      │
-│ 5. gradle-helper         → 构建脚本排错     │
-└─────────────────────────────────────────────┘
+但关掉 `android-code-review` 的第三天我就受不了了——提交 MR 的时候总觉得少了层屏障，心里不踏实。第四天老老实实加回来了。
 
-不推荐：
-✗ dispatcher/superagent-heavy → 小团队用不上并行调度
-✗ compliance-check → 新项目无合规需求
-✗ legacy-migration → 无历史债务
-```
+这个方法的好处是：**不依赖任何假设，全靠体感验证。** 你不需要评估"这个 Skill 理论上有没有用"，你只需要感受"没有它我还能不能干活"。
 
-<!-- TODO: 补充截图：场景 A 评分表填写示例 -->
+> 我筛掉了 12 个 Skill，其中 8 个是"装上就没再用过"的。你大概率也躺了这种。
 
-##### 场景 B：4-10 人 · 成熟项目
+### 第二步：频率分析——它到底有多少次真的触发了？
 
-> 特点：有 CI/CD，有 Code Review 流程，存在中等技术债务
+必要性测试过后的 Skill，都算是"似乎有用"的。接下来要看实际触发频率。
 
-```text
-推荐配置（Top 8）：
-┌─────────────────────────────────────────────┐
-│ 1. brainstorming         → 需求评审阶段     │
-│ 2. writing-plans         → 复杂任务分拆     │
-│ 3. executing-plans       → 按计划执行       │
-│ 4. android-code-review   → 自动化审查       │
-│ 5. systematic-debugging  → Bug 修复流程     │
-│ 6. test-driven-development → 提高覆盖率    │
-│ 7. gradle-helper         → 构建优化         │
-│ 8. memory-bank           → 跨会话记忆       │
-└─────────────────────────────────────────────┘
+怎么做？很多 AI 编码工具都能看到 Skill 的触发日志（比如 Claude Code 的 `/skills` 面板或者 Cursor 的 Rules 面板）。找一个典型的工作周，统计每个 Skill 实际被触发了多少次。
 
-按阶段启用（避免同时加载）：
-  需求阶段：brainstorming + writing-plans
-  开发阶段：executing-plans + test-driven-development
-  提交阶段：android-code-review
-  Bug 修复：systematic-debugging
-```
+我的结果：
 
-<!-- TODO: 补充截图：场景 B 按阶段启用流程图 -->
+| Skill | 周触发次数 | 结论 |
+|---|---|---|
+| brainstorming | 22 次 | 高频核心，保留 |
+| android-code-review | 15 次 | 高频核心，保留 |
+| test-driven-development | 8 次 | 中频，保留 |
+| writing-plans | 3 次 | 低频但关键，保留 |
+| memory-bank | 1 次 | 低频且可替代，删除 |
+| superagent-heavy | 0 次 | 直接删 |
+| compliance-check | 0 次 | 直接删 |
 
-##### 场景 C：10+ 人 · 重构项目
+你可能会问：`memory-bank` 为什么只触发 1 次？因为它和 `CLAUDE.md` 的 Memory 能力高度重叠（后面讲去重的时候细说）。
 
-> 特点：多模块，历史代码复杂，需要严格流程管控
+我的阈值：**每周触发 < 3 次且没有"不可替代性"，就考虑删除。**
 
-```text
-推荐配置（Top 10）：
-┌──────────────────────────────────────────────┐
-│ 1. brainstorming         → 重构方案评审      │
-│ 2. writing-plans         → 分步重构计划      │
-│ 3. executing-plans       → 严格按计划执行     │
-│ 4. android-code-review   → 多维度审查        │
-│ 5. systematic-debugging  → 回归 Bug 定位     │
-│ 6. test-driven-development → 重构安全保障    │
-│ 7. architecture-design   → 架构决策记录      │
-│ 8. legacy-migration      → 历史代码迁移策略   │
-│ 9. gradle-helper         → 多模块构建管理    │
-│ 10. memory-bank          → 跨会话上下文保持   │
-└──────────────────────────────────────────────┘
+什么是"不可替代性"？`writing-plans` 一周只用 3 次，但每次都是给复杂任务做分拆，没有它我确实会更痛苦。而 `memory-bank` 一周只用 1 次，且 `CLAUDE.md` 基本能覆盖它的功能——这就属于可替代的。
 
-额外建议：
-  • 启用 Rules 文件定义模块边界（参见 9.2 节）
-  • 设置 Token 上限避免上下文溢出（参见 10.3 节）
-  • 建立 Skill 评审委员会（参见 6.4 节）
-```
+<!-- TODO: 补充截图：Skill 触发频率统计面板截图 -->
 
-#### 3. 自行打分实操表
+### 第三步：A/B 测试——相同的任务，有和没有差距多大？
 
-拿出纸笔或 Excel，对每个候选 Skill 填下表：
+频率过关的 Skill，还要过最后一关：**它到底带来了多大提升？**
 
-| Skill 名称 | 团队规模 (1-5) | 项目阶段 (1-5) | 技术栈 (1-5) | Token效率 (1-5) | 加权总分 | 决策 |
-|-----------|:-----------:|:-----------:|:----------:|:-------------:|:------:|:----:|
-| brainstorming | 5 | 4 | 4 | 4 | 4.3 | ✅ |
-| superagent-heavy | 1 | 2 | 3 | 2 | 1.9 | ❌ |
-| legacy-migration | 2 | 5 | 4 | 3 | 3.4 | ⚠️ |
-| ... | | | | | | |
+我的方法是：找 3 个代表性任务，每个任务分别在"有 Skill"和"无 Skill"两种状态下跑一次，对比四个指标：
 
-> 权重：30% + 25% + 25% + 20%
+1. **首轮输出质量**（不需要额外纠正的次数占比）
+2. **完成任务的轮次**
+3. **Token 消耗**
+4. **我自己的主观满意度**
 
-<!-- TODO: 补充截图：自行打分实操表填写范例 -->
+以 `test-driven-development` 为例，我的 A/B 结果：
 
-### 动手实践
+| 指标 | 有 TDD Skill | 无 TDD Skill |
+|---|---|---|
+| 输出直接可用 | 7/10 | 4/10 |
+| 平均轮次 | 3.2 轮 | 5.8 轮 |
+| Token 消耗 | 8,200 | 11,400 |
+| 主观满意度 | ⭐⭐⭐⭐ | ⭐⭐ |
 
-**任务**：为你当前项目完成 Skills 评分表
+虽然 Skill 本身吃掉了 1,200 tokens，但因为输出质量更高、纠偏轮次更少，**总 Token 消耗反而降低了 28%**。这是"好 Skill"的典型特征——它吃掉的 Token 成本被它节省的纠偏 Token 覆盖了。
 
-1. 列出你当前启用的所有 Skill（检查 `.claude/skills/` 目录）
-2. 用上述矩阵给每个 Skill 打分
-3. 将总分 < 3 的 Skill 禁用
-4. 对比禁用前后的 Token 消耗变化
+而另一个 `compose-ui-generator` 的测试结果就不太妙：
 
-**预期结果**：你可能发现 20-30% 的 Skill 实际上是不需要的。
+| 指标 | 有 Skill | 无 Skill |
+|---|---|---|
+| 输出直接可用 | 6/10 | 5/10 |
+| Token 消耗 | 9,600 | 7,200 |
 
-### 踩坑记录
+**输出质量提升微乎其微，但 Token 多了 2,400。** 这样的 Skill 就是"蹭热度的"——有它没它差不多，但它稳定地吃掉你的预算。果断删。
 
-- **坑 1**："评分高就全部加载"——评分只是参考，内存中的并发 Skill 建议不超过 6 个，否则上下文噪音会降低模型输出质量。
-- **坑 2**："小团队也用 dispatcher"——并行调度 Skill 在小团队反而增加决策成本，等你团队到了 4 人以上再考虑。
-- **坑 3**："只看 GitHub Star 数"——Star 多不代表适合你，社区热度 ≠ 技术栈契合度。
+<!-- TODO: 补充截图：A/B 测试对比结果可视化图表 -->
 
----
+### 第四步：Token 核算——每个 Skill 的单次对话成本
 
-## 6.2 功能重叠时的决策流程
-
-### 本节目标
-
-当两个以上 Skills 功能高度相似（如 memory-bank vs spec-driven vs 原生 CLAUDE.md 的 Memory 能力），学会用五步决策法快速选型。
-
-### 正文
-
-Skills 生态的必然结果：同类功能会有多个实现。选择困难时，按以下流程决策。
-
-#### 决策五步法
+有些 Skill 的问题不是"有没有用"，而是"性价比太低"。我算了一笔账：
 
 ```
-Step 1: 功能覆盖度对比
-   ↓
-Step 2: 维护活跃度检查
-   ↓
-Step 3: Token 消耗实测
-   ↓
-Step 4: 社区口碑评估
-   ↓
-Step 5: 最终决策
+单次对话成本 = Skill 注入 Token 数 × 平均对话轮次
 ```
 
-#### Step 1：功能覆盖度对比
+以 `architecture-design` Skill 为例，它的 SKILL.md 注入约 1,800 tokens。我一个关于架构的对话通常走 8-10 轮（因为每轮上下文都会带着这些指令），相当于一个架构对话的固定成本是 14,000-18,000 tokens。
 
-以 **Memory 类（跨会话记忆保持）** 为例：
+而同样的架构讨论，我如果在 `CLAUDE.md` 里写一份 400 字的"团队架构约定"，固定成本只有 2,000-3,000 tokens。
 
-| 能力 | memory-bank | spec-driven | 原生 CLAUDE.md | 说明 |
-|------|:----------:|:----------:|:------------:|------|
-| 自动上下文保存 | ✅ | ❌ | ⚠️ 静态 | CLAUDE.md 需手动维护 |
-| 结构化项目记忆 | ✅ | ✅ | ❌ | spec-driven 偏 PRD 方向 |
-| 跨会话恢复 | ✅ | ✅ | ❌ | |
-| Android 项目感知 | ⚠️ 通用 | ⚠️ 通用 | ✅ 可定制 | CLAUDE.md 可写 build.gradle 等 |
-| 学习成本 | 中 | 高 | 低 | |
-| Token 开销 | ~800/session | ~1200/session | ~0 | CLAUDE.md 几乎零开销 |
+这不代表 `architecture-design` Skill 没用——它的触发条件非常窄，只有在聊架构时才会激活。所以关键是：
 
-**结论**：
-- 如果你需要**自动、动态**的项目记忆 → `memory-bank`
-- 如果你偏重**需求 → 实现**的完整追踪 → `spec-driven`
-- 如果团队**保持小而简单** → 写一份好的 `CLAUDE.md` 就够了
+> **Skill 的 Token 开销要和它的触发频率和场景复杂度匹配。** 高频 + 轻量 = 好 Skill。低频 + 重 Token + 无显著提升 = 该删。
 
-#### Step 2：维护活跃度检查
+<!-- TODO: 补充截图：各 Skill Token 开销 vs 触发频率散点图 -->
 
-用 GitHub API 或直接浏览仓库检查：
+### 第五步：维护度检查——这个 Skill 还活着吗？
 
-```bash
-# 检查最近提交时间
-curl -s https://api.github.com/repos/{owner}/{repo}/commits?per_page=3 | \
-  jq '.[].commit.author.date'
+最后一道关：检查社区 Skill 的作者是否还在维护。
 
-# 检查 Issue 响应速度
-curl -s https://api.github.com/repos/{owner}/{repo}/issues?state=open&per_page=5 | \
-  jq '.[] | {title: .title, created: .created_at, comments: .comments}'
-```
+很多 GitHub 上挂的 Skill 仓库，实际上已经被弃坑了。我碰到的坑：
 
-活跃度红线：
-- 最近一次提交 > 6 个月 → 🚩 高风险
-- Open Issue > 50 且近期无回复 → 🚩 社区不活跃
-- PR 合并周期 > 30 天 → 🚩 维护者响应慢
+- 某 `legacy-migration` Skill，最后一次提交是 2023 年 5 月，Issue 区堆了 37 个问题无人回复
+- 某 `gradle-helper` Skill，适配的是 AGP 7.x，我项目用的 8.5，规则完全过时
+- 某 `security-audit` Skill，README 里写着"支持 OWASP Top 10 2021"，但 2023 年版的检查项一个没有
 
-#### Step 3：Token 消耗实测
+检查清单很简单：
 
-在相同任务下对比 Token 消耗：
+- 最近一次 commit 是否在 6 个月内？
+- Open Issue 数量是否超过 20 且近期无回复？
+- CHANGELOG 是否持续更新？
 
-```python
-# 示例：在 OpenCode/Cursor/Claude Code 中分别实测
-# 任务：为 LoginViewModel 写单元测试
+满足任意一个红旗就直接放弃。过时的 Skill 比没有 Skill 更危险——它会给你过时的建议，而你还以为它在帮你。
 
-# Skill A: memory-bank
-# Input tokens:  4,200
-# Output tokens: 1,800
-# Total:         6,000
+## 三个同类型 Skill？我的去重策略
 
-# Skill B: spec-driven
-# Input tokens:  5,800
-# Output tokens: 2,100
-# Total:         7,900
+搞完五步筛选，还剩一个问题：同类型的 Skill 怎么办？
 
-# 原生 CLAUDE.md（无额外 Skill）
-# Input tokens:  2,100
-# Output tokens: 1,600
-# Total:         3,700
-```
+我之前装了 3 个"代码审查"Skill：`android-code-review`、`general-code-review`、`kotlin-review`。它们都声称能做代码审查，但侧重点不同。
 
-> 结论：CLAUDE.md 零额外 Token 开销，但在复杂场景下记忆效果不如 memory-bank。**按任务复杂度选型**——简单项目用 CLAUDE.md，复杂项目用 memory-bank。
+我处理重叠 Skill 的方法是这样的：
 
-<!-- TODO: 补充截图：Token 消耗对比柱状图 -->
+### 画一个功能覆盖矩阵
 
-#### Step 4：社区口碑评估
+| 能力 | android-code-review | general-code-review | kotlin-review |
+|---|---|---|---|
+| Android 架构审查 | ✅ | ❌ | ❌ |
+| Compose 专项 | ✅ | ❌ | ⚠️ 部分 |
+| Kotlin 最佳实践 | ✅ | ⚠️ 通用 | ✅ 深入 |
+| 安全审计 | ✅ | ✅ | ❌ |
+| 性能分析 | ✅ | ✅ | ❌ |
+| Token 开销 | ~1,200 | ~800 | ~1,500 |
 
-关注以下信息源：
+### 我的决策逻辑：选最聚焦的，不选最全面的
 
-| 来源 | 关注点 |
-|------|-------|
-| GitHub Discussions | 真实用户反馈、边缘案例 |
-| Reddit r/androiddev | Android 开发者视角 |
-| Twitter/X #AICoding | 最新趋势 |
-| Discord/Slack 社区 | 实时讨论 |
+第一反应可能是选 `android-code-review`——它覆盖面最广。但这里有个陷阱：**覆盖面最广的 Skill，往往每一项都做不深。**
 
-#### Step 5：决策模板
+`kotlin-review` 在 Kotlin 最佳实践上是最深入的，但它的安全审计和性能分析几乎是空的。`general-code-review` 覆盖面不错但没有任何 Android 感知。`android-code-review` 是唯一一个在保持 Android 特异性的同时没有明显短板的。
 
-```markdown
-## Skill 选型决策：{Skill类别}
+最终决策：**只保留 `android-code-review`。**
 
-**背景**：{为什么需要这类 Skill}
+判断标准不是"哪个覆盖最多"，而是"哪个在你的项目上下文中没有致命盲区"。对我来说，Kotlin 最佳实践这块虽然有 `kotlin-review` 做得更好，但 `android-code-review` 已经覆盖了 80% 的关键检查项，剩下的 20% 我可以自己补充到团队规范里。
 
-**候选**：
-1. {Skill A} - {一句话特点}
-2. {Skill B} - {一句话特点}
-3. {Skill C} - {一句话特点}
+**一个聚焦的好 Skill > 三个各有所长但互相冲突的 Skill。**
 
-**对比结果**：
-| 维度 | A | B | C |
-|------|---|---|---|
-| 功能覆盖 | ⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| 维护活跃 | ⭐⭐⭐+ | ⭐⭐⭐⭐ | ⭐⭐ |
-| Token开销 | ⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ |
-| 社区口碑 | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ |
-| 总分 | 15 | 14 | 12 |
+## 用社区的，还是自己写？
 
-**决策**：选择 A，原因是...
-**备用方案**：如果 A 不满足需求，切换到 C 的成本是...
-```
+这其实是一个"通用 vs 专用"的取舍。我的判断标准很简单：
 
-### 动手实践
+**通用工作流（TDD、调试、需求澄清）→ 用社区的。** 这些流程放之四海皆准，社区维护者通常比你有更多精力打磨细节。`test-driven-development`、`systematic-debugging`、`brainstorming` 这些 Skill，我用的都是社区版，几乎没改过。
 
-**任务**：对你项目中的一组功能重叠 Skill 执行五步法决策
+**Android 特有领域知识 → 自己写。** 社区找不到能真正理解你项目架构的 Skill。你的模块依赖关系、命名规范、Compose 组件库，只有你自己知道。我花了一个下午写了个 `android-dev-assist`，只做三件事：注入模块地图、注入命名规范、注入构建配置。Token 开销 600，但每次创建新文件、处理依赖冲突、调整模块结构时都能用上。
 
-1. 找出当前同时启用的相似 Skill（如 2 个以上的 review 类 Skill）
-2. 用 Step 2 的命令检查它们的最新提交时间
-3. 在同一个任务上对比 Token 消耗
-4. 填充决策模板，形成团队文档
+**公司内部规范 → 必须自己写。** 这个没有商量余地。你的 API 地址、内部组件库、CI 流程，社区 Skill 不可能知道。而且涉及安全规范的东西，你也不敢交给一个不熟悉的第三方 Skill。
 
-### 踩坑记录
+### 那自己写 Skill，怎么保证质量？
 
-- **坑 1**："功能覆盖广一定好"——功能多 ≠ 每项都做得好。一个专注做一件事的 Skill 往往比大而全的更可靠。
-- **坑 2**："Star 多就可以放心用"——star 数的增长可能只是某次营销活动的效果，不反映代码质量。
-- **坑 3**："CLAUDE.md 够用了不需要 Skill"——对于 4 人以上团队，纯 Markdown 的 Memory 能力无法替换 memory-bank 的跨会话状态管理。
+我踩过最大的坑就是"写得太全面"。第一个版本的 `android-dev-assist` 洋洋洒洒 1,200 行，塞满了从架构原则到编码细则到测试策略的所有内容。结果是什么？每次触发吃掉 3,000+ tokens，而且因为信息密度太高，AI 反而抓不住重点。
 
----
+后来我总结了几条写 Skill 的原则：
 
-## 6.3 自定义 Skill 编写实战
+**触发词要窄，不要宽。** 不是万能胶就是好 Skill。`android-dev-assist` 的触发词是"构建失败"、"创建新模块"、"依赖冲突"——这些都是非常具体的场景。你不会希望每次说"帮我"就激活一堆 Skill。
 
-### 本节目标
-
-手把手写出团队第一个 Android 专用 Skill，掌握 Skill 的目录结构、触发词设计和上下文注入策略。
-
-### 正文
-
-社区 Skill 再丰富，也无法覆盖你的项目特有的技术债、命名规范和模块结构。自定义 Skill 是解决"最后一公里"问题的关键。
-
-#### 1. Skill 目录结构
-
-```text
-.claude/skills/android-dev/
-├── SKILL.md              # 必需：Skill 定义文件
-├── references/           # 可选：上下文注入文件
-│   ├── build-config.md   # build.gradle 内容快照
-│   ├── proguard-rules.md # 混淆规则
-│   ├── module-map.md     # 模块依赖关系
-│   └── naming-conventions.md  # 命名规范
-└── scripts/              # 可选：自动化脚本
-    └── check-lint.sh
-```
-
-#### 2. SKILL.md 核心结构
-
-```markdown
----
-name: android-dev-assist
-description: Android 项目开发辅助，注入项目规范、构建配置和模块上下文
-triggers:
-  - "构建失败"
-  - "build failed"
-  - "创建新模块"
-  - "add module"
-  - "依赖冲突"
-  - "dependency"
-mode: auto
----
-
-# Android Dev Assist Skill
-
-为当前 AI 会话注入以下项目上下文：
-
-## 项目信息
-- 包名: com.example.myapp
-- 最低 SDK: 26
-- 目标 SDK: 34
-- Kotlin 版本: 2.0.0
-- AGP 版本: 8.5.0
-
-## 模块结构
-{{REFERENCES:references/module-map.md}}
-
-## 编码规范
-{{REFERENCES:references/naming-conventions.md}}
-
-## 执行规则
-1. 创建新文件时，检查 references/module-map.md 确定所属模块
-2. 使用 Kotlin DSL 编写 build.gradle.kts
-3. 遵循 references/naming-conventions.md 命名
-4. 涉及 ProGuard 时，同时更新 references/proguard-rules.md
-```
-
-#### 3. 触发词设计原则
-
-```text
-好的触发词特征：
-  ✅ 具体明确："构建失败" > "build"
-  ✅ 覆盖中英文："依赖冲突" + "dependency"
-  ✅ 包含特征关键词："gradle sync failed"、"sync 失败"
-  ✅ 避免过度宽泛：不要用 "代码"、"文件" 等通用词
-
-差的触发词示例：
-  ❌ "android" —— 太宽泛，每句话都可能触发
-  ❌ "bug" —— 同上
-  ❌ "帮我" —— 无意义
-```
-
-#### 4. 上下文注入策略
-
-Skill 的核心价值在于**在正确的时机注入正确的上下文**。三种策略：
-
-| 策略 | 用法 | 适用场景 | Token 开销 |
-|------|------|---------|:---------:|
-| **静态内联** | 直接把内容写在 SKILL.md | 不会频繁变动的常量 | 低 |
-| **{{REFERENCES}}** | 引用外部文件 | 构建配置、版本号等 | 中 |
-| **动态生成** | 脚本运行时获取 | git 分支、最近提交等 | 高 |
-
-示例——`references/module-map.md`：
-
-```markdown
-# 模块依赖关系
-
-```
-app (application)
-├── :feature:login (android-library)
-│   ├── :core:network (android-library)
-│   └── :core:common (android-library)
-├── :feature:profile (android-library)
-│   ├── :core:network (android-library)
-│   └── :core:database (android-library)
-├── :core:network (android-library)
-└── :core:database (android-library)
-```
-
-**模块间规则**：
-- `app` 可以依赖所有 feature 和 core 模块
-- `feature:*` 只能依赖 `core:*` 模块，不能依赖其他 feature
-- `core:*` 禁止依赖 `feature:*` 模块
-```
-
-#### 5. 完整示例：Android Code Review Skill
-
-一个可直接使用的代码审查 Skill：
-
-```markdown
----
-name: android-code-review
-description: Review Android 代码，检查架构分层、性能问题和 Kotlin 最佳实践
-triggers:
-  - "review"
-  - "代码审查"
-  - "code review"
-  - "帮我看看这段代码"
-  - "检查代码"
-mode: manual
----
+**注入内容要聚焦，不要试图教 AI 一切。** 最好的 Skill 不是一本百科全书，而是一张导航图。它告诉 AI "去哪里找信息"、"优先用什么方案"、"禁止用什么做法"，而不是把整个项目的所有文档都灌进去。
 
-# Android Code Review Skill
+**用"有 Skill / 无 Skill"对比法测试。** 写完 Skill 之后，找 3 个任务分别跑两遍，一遍加载 Skill，一遍不加载。如果两遍输出质量差不多，说明你的 Skill 是无效的——要么内容太空泛，要么触发条件太宽松导致每次都在场等于每次都不在场。
 
-## 审查清单
+<!-- TODO: 补充截图：自定义 Skill 加载后的对话效果对比 -->
 
-### 1. 架构与分层（Architecture）
-- [ ] ViewModel 未持有 View/Context 引用
-- [ ] Repository 层不直接访问 ViewModel
-- [ ] 模块依赖方向正确（core ← feature ← app）
-- [ ] UseCase 粒度合理，单一职责
+## Skill 堆里的依赖冲突问题
 
-### 2. Kotlin 最佳实践
-- [ ] 避免不必要的 `!!` 非空断言
-- [ ] 优先使用 `data class` 而非手动实现 equals/hashCode
-- [ ] Flow 收集使用 `repeatOnLifecycle` 而非 `launchWhenX`
-- [ ] `sealed class` > `enum`（需要携带数据时）
-- [ ] 使用 `object` 单例时注意线程安全
+更隐蔽的一个坑：Skill A 假设 Skill B 已经装好了。
 
-### 3. Compose 专项
-- [ ] `remember` 中避免副作用操作
-- [ ] `derivedStateOf` 使用得当，避免无效重组
-- [ ] `key()` 用于稳定列表项标识
-- [ ] Modifier 链顺序正确（padding → background → clickable）
-- [ ] `@Stable` 标注正确使用
+我遇到过一个案例：某 `superagent-heavy` Skill 的文档里写着"请确保已安装 dispatcher Skill，本 Skill 依赖其路由能力"。而 `dispatcher` 我早就删了。结果 `superagent-heavy` 激活后不停地报错，我一脸茫然，查了半个小时才发现是间接依赖出了问题。
 
-### 4. 性能与内存
-- [ ] 无主线程 I/O 操作
-- [ ] Bitmap 使用后及时回收
-- [ ] RecyclerView/Compose LazyList 正确复用
-- [ ] WebView 生命周期管理正确
-- [ ] 避免 Activity/Fragment 内存泄漏
-
-### 5. 测试
-- [ ] ViewModel 单元测试覆盖率 ≥ 80%
-- [ ] Repository 使用 Fake 实现测试
-- [ ] 测试命名遵循 `given_when_then` 格式
-- [ ] Robolectric 测试不使用真实设备依赖
-
-### 6. 安全
-- [ ] 敏感信息未硬编码（API Key, Token）
-- [ ] ProGuard 规则已更新（如有新增 @Keep）
-- [ ] WebView `setJavaScriptEnabled` 有正当理由
-- [ ] 输入校验覆盖所有外部数据源
-
-## 输出格式
+另一个案例：`spec-driven` 和 `memory-bank` 都试图管理跨会话状态，它们各自在上下文里注入了一套"项目记忆"的指令。当两个同时激活时，AI 有时用这一套，有时用那一套，项目记忆成了薛定谔的状态。
 
-```markdown
-## Code Review 结果
+**解决方案：画一张 Skill 依赖图。** 很简单，拿张纸，把每个 Skill 列出来，箭头表示依赖关系。如果 A 依赖 B 而你已经删了 B，要么删 A，要么找替代。如果有两个 Skill 管理同一块领域，只留一个。
 
-**文件**：`{file_path}`
-**严重程度**：🔴 严重 / 🟡 警告 / 🟢 建议
+## 我的三套"Skill 栈"
 
-### 🔴 严重问题
-- {问题描述} (行 {N})
-- 修复建议：{具体代码示例}
+筛选完、去重完、整理完，我现在根据场景使用三套不同的 Skill 组合：
 
-### 🟡 警告
-- {问题描述} (行 {N})
-- 修复建议：{具体代码示例}
-
-### 🟢 建议
-- {改进点}
-```
+**日常编码（5 个）：** `brainstorming` + `android-code-review` + `test-driven-development` + `writing-plans` + `android-dev-assist`（自写）
 
-### 动手实践
+这是我 90% 时间用的配置。需求澄清、代码生成、测试、审查、规范注入——覆盖了日常 Android 开发的全流程。总 Token 前置开销约 4,000 tokens。
 
-**任务**：为你的项目创建团队专属 Skill
+**代码审查专用（3 个）：** `android-code-review` + `systematic-debugging`（如有 Bug 要分析）+ `android-dev-assist`
 
-1. 在 `.claude/skills/` 下创建 `android-dev/` 目录结构
-2. 编写 `SKILL.md`，至少包含 3 个触发词
-3. 创建 `references/module-map.md`（至少记录 3 个模块的依赖关系）
-4. 用一句话描述你的 Skill，提交到团队仓库
+审查时不需要需求澄清和测试生成，所以把 `brainstorming` 和 `TDD` 摘掉。
 
-**验证方法**：在 AI 工具中说触发词，确认 Skill 被加载，检查上下文是否包含你的项目信息。
+**架构设计专用（4 个）：** `brainstorming` + `writing-plans` + `android-dev-assist` + `memory-bank`（偶尔用，记录架构决策）
 
-<!-- TODO: 补充截图：Skill 加载成功后的对话界面 -->
+架构讨论轮数多、信息量大，偶尔需要 `memory-bank` 在跨会话时保持上下文。但因为触发频率低，不日常加载。
 
-### 踩坑记录
+你不需要照抄我的配置。关键是理解这个思路：**按场景定制 Skill 组合，而不是一个配置用到底。**
 
-- **坑 1**："触发词设成 '*' 想让 Skill 每次都加载"——这会导致每次对话都注入大量上下文，Token 消耗暴涨，模型输出质量反而下降。
-- **坑 2**："{{REFERENCES}} 路径写错"——引用路径相对于 SKILL.md 所在目录，不是项目根目录。
-- **坑 3**："references 文件太长"——单文件超过 500 行会导致上下文占据过多 token 预算，建议拆分成多个小文件，按需加载。
+<!-- TODO: 补充截图：三套 Skill 栈的对比表格 -->
 
----
-
-## 6.4 维护与演进
-
-### 本节目标
-
-确保 Skill 体系不会变成"一次性配置"，建立可持续的维护机制。
+## 总结：比装更多 Skill 更重要的事
 
-### 正文
+说回三个月前那个装了 30 个 Skill 的我。当时我的心态是"万一哪天要用呢"——典型的松鼠囤积心理。
 
-#### 1. Skills 版本管理策略
+现在回头看，Skill 不是越多越好，甚至不是"好 Skill 越多越好"。上下文窗口是稀缺资源，你每多加一个 Skill，就意味着留给实际代码讨论的空间少了一点。
 
-| 策略 | 适用场景 | 优点 | 缺点 |
-|------|---------|------|------|
-| **Git 子模块** | 社区 Skill 需要追踪上游更新 | 版本可控，可回溯 | 新人克隆需 `--recursive` |
-| **独立仓库 + 符号链接** | 多项目共享同一套 Skill | 一处更新，多项目生效 | 跨平台兼容性（Windows） |
-| **直接纳入项目仓库** | 团队自定义 Skill | 简单粗暴 | 多项目需手动同步 |
-| **MCP 服务分发** | 100+ 人大团队 | 集中管理，灰度发布 | 需要服务端基础设施 |
+真正能拉开差距的不是你装了多少 Skill，而是你有没有花时间去筛、去试、去优化，找到和你项目最匹配的那个最小集。
 
-推荐的小团队方案：
+**更好的输出，来自于更精准的上下文，而不是更多的上下文。**
 
-```bash
-# 社区 Skill 用 Git 子模块管理
-git submodule add https://github.com/example/android-skill.git \
-  .claude/skills/community/android-code-review
-
-# 团队自定义 Skill 直接纳入项目仓库
-mkdir -p .claude/skills/team/android-dev/
-```
-
-```bash
-# 更新所有社区 Skill 到最新版本
-git submodule update --remote .claude/skills/community/*
-```
-
-#### 2. 定期审查周期
-
-```text
-┌──────────────────────────────────────────────────┐
-│ 季度审查清单（建议每 3 个月执行一次）              │
-├──────────────────────────────────────────────────┤
-│ □ 审查所有启用 Skill 的 Token 消耗报告            │
-│ □ 检查社区 Skill 是否有 Breaking Change 更新      │
-│ □ 新增 Skill 评估（社区新涌现的好 Skill）         │
-│ □ 废弃 Skill 清理（6 个月未使用且评分 < 3 的）    │
-│ □ 自定义 Skill 的触发词是否需要调整               │
-│ □ references 文件是否需要刷新（版本号、模块结构） │
-│ □ 团队反馈收集（哪些 Skill 好用/不好用）          │
-└──────────────────────────────────────────────────┘
-```
-
-#### 3. 团队共识建立
-
-Skill 引入不是个人行为。让团队认可你的 Skill 配置：
-
-```markdown
-## Skill 提案模板
-
-**提案人**：{姓名}
-**日期**：{YYYY-MM-DD}
-
-**Skill 名称**：{name}
-**解决什么问题**：{当前痛点的具体描述，附实际案例}
-
-**替代方案**：
-1. {现有 Skill 替代} → 不推荐原因
-2. {不引入} → 为什么不行
-
-**预期收益**：
-- Token 成本影响：预计 {+/-} X tokens/session
-- 开发效率提升：预计 {X}%
-
-**试用期**：2 周
-**衡量指标**：{如何判断成功/失败}
-**决策**：□ 批准  □ 拒绝  □ 有条件通过（条件：___）
-```
-
-### 动手实践
-
-**任务**：建立团队 Skill 审查日历
-
-1. 在团队日历中创建季度重复事件
-2. 将上述审查清单录入事件描述
-3. 指定轮值负责人
-4. 第一次审查时填充模板记录结果
-
-### 踩坑记录
-
-- **坑 1**："配置完就不管了"——社区 Skill 的 Breaking Change 会让你某天突然发现功能失效。务必关注社区 Skill 仓库的 Release Notes。
-- **坑 2**："每个人随意添加 Skill"——不加管理的 Skill 体系 3 个月后必然演变成上下文噪音沼泽。建立审批机制，即便是 3 人小团队。
-- **坑 3**："子模块忘了更新"——CI 中加入检查脚本：如果子模块版本落后 3 个月以上，CI 发出 Warning。
-
-```bash
-#!/bin/bash
-# 检查社区 Skill 子模块是否过期（加入 CI pipeline）
-for skill in .claude/skills/community/*/; do
-  last_commit=$(git -C "$skill" log -1 --format=%ct)
-  three_months_ago=$(date -v-3m +%s)
-  if [ "$last_commit" -lt "$three_months_ago" ]; then
-    echo "⚠️  $(basename "$skill") 超过 3 个月未更新"
-  fi
-done
-```
-
----
-
-## 本章小结
-
-现在你已经掌握：
-
-1. **筛选矩阵** — 3 个维度 + 1 个公式 = 5 分钟锁定最佳 Skill 组合
-2. **五步决策法** — 功能重叠时的标准决策流程
-3. **自定义 Skill** — 从目录结构到触发词，从上下文注入到完整 CR Skill
-4. **维护机制** — 季度审查 + 版本管理 + 团队共识
-
-**下一步**：带上你的 Skill 配置，进入第 7 章《接入项目全流程》，学习如何在产品的每个阶段有效使用 AI。
+记住这句话就够了。
 
 <!-- TODO: 补充截图 -->
-<!-- TODO: 补充各场景的 Token 消耗实测数据图表 -->
