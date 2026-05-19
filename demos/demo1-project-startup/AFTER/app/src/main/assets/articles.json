@@ -1,0 +1,92 @@
+[
+  {
+    "id": "1",
+    "title": "Kotlin 2.0 新特性：Compose 编译器插件",
+    "summary": "Kotlin 2.0 带来了内置的 Compose 编译器插件，告别额外配置，让 Compose 开发体验大幅提升。",
+    "content": "# Kotlin 2.0 新特性：Compose 编译器插件\n\nKotlin 2.0 最大的变化之一是将 Compose 编译器直接集成到 Kotlin 编译器中。\n\n## 变化之前\n\n之前使用 Compose 需要单独配置 `compose-compiler` 版本，且必须与 Kotlin 版本严格匹配：\n\n```kotlin\ncomposeOptions {\n    kotlinCompilerExtensionVersion = \"1.5.x\"\n}\n```\n\n## 变化之后\n\nKotlin 2.0 内置 Compose 编译器插件，只需一行：\n\n```kotlin\nplugins {\n    id(\"org.jetbrains.kotlin.plugin.compose\") version \"2.0.21\"\n}\n```\n\n## 迁移要点\n\n1. 移除 `composeOptions` 中的 `kotlinCompilerExtensionVersion`\n2. 添加 Compose 编译器插件\n3. 确保 Compose BOM 版本兼容\n\n此改动显著简化了版本管理，不再需要手动对齐 Kotlin 和 Compose 编译器版本。",
+    "author": "Zhang San",
+    "publishDate": "2025-05-10",
+    "tags": ["Kotlin", "Compose", "迁移"]
+  },
+  {
+    "id": "2",
+    "title": "Room 数据库迁移最佳实践",
+    "summary": "数据库迁移是 Android 开发中最容易出错的部分之一。本文详解 Room Migration 的安全实践。",
+    "content": "# Room 数据库迁移最佳实践\n\n## 禁止 fallbackToDestructiveMigration\n\n**生产环境绝对禁止**使用 `fallbackToDestructiveMigration()`，这会导致用户数据全部丢失。\n\n```kotlin\n// ❌ 危险\nRoom.databaseBuilder(...)\n    .fallbackToDestructiveMigration()\n    .build()\n\n// ✅ 正确\nRoom.databaseBuilder(...)\n    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)\n    .build()\n```\n\n## 迁移测试\n\n每次新增 Migration 必须编写测试：\n\n```kotlin\n@Test\nfun migration_1_2() {\n    helper.createDatabase(\"test_db\", 1)\n        .apply { /* 插入测试数据 */ }\n        .close()\n    \n    helper.runMigrationsAndValidate(\"test_db\", 2, true, MIGRATION_1_2)\n}\n```\n\n## 关键原则\n\n1. 每个版本只写增量迁移\n2. 迁移必须可逆吗？不必，但需考虑回滚场景\n3. 大数据迁移放在后台线程\n4. 迁移中不执行耗时 UI 操作",
+    "author": "Li Si",
+    "publishDate": "2025-05-08",
+    "tags": ["Room", "数据库", "迁移"]
+  },
+  {
+    "id": "3",
+    "title": "Hilt 依赖注入实战：从入门到团队落地",
+    "summary": "从 Component、Module 到 ViewModel 注入，系统掌握 Hilt 在 Clean Architecture 中的最佳实践。",
+    "content": "# Hilt 依赖注入实战\n\n## 架构分层中的 Hilt\n\n在 Clean Architecture 中，Hilt 的角色是**在 app 层装配依赖图**：\n\n```\n:app（装配层）\n ├── @HiltAndroidApp Application\n ├── DataModule（绑定实现）\n └── NavHost\n\n:core:domain（纯接口）\n └── interface ArticleRepository\n\n:core:data（实现层）\n ├── @Singleton ArticleRepositoryImpl\n └── @Module DataModule\n```\n\n## ViewModel 注入\n\n```kotlin\n@HiltViewModel\nclass FeedViewModel @Inject constructor(\n    private val getArticlesUseCase: GetArticlesUseCase\n) : ViewModel()\n```\n\n## 模块边界\n\n- `feature:*` 只依赖 `core:domain`，不直接依赖 `core:data`\n- `core:data` 的 `@Module` 负责将接口绑定到实现\n- Hilt 在编译期验证依赖图完整性",
+    "author": "Wang Wu",
+    "publishDate": "2025-05-05",
+    "tags": ["Hilt", "DI", "架构"]
+  },
+  {
+    "id": "4",
+    "title": "Compose Modifier 顺序避坑指南",
+    "summary": "Modifier 顺序是 AI 最高频翻车点。理解由外到内的语义，避免点击区域错位。",
+    "content": "# Compose Modifier 顺序避坑指南\n\n## 核心原则：由外到内\n\nModifier 链遵循**从外到内**的布局语义：\n\n```kotlin\n// ✅ 正确：padding 在外，clickable 在内\nBox(\n    modifier = Modifier\n        .size(48.dp)\n        .padding(8.dp)\n        .background(Color.Blue)\n        .clickable { onClick() }\n)\n\n// ❌ 错误：clickable 被 padding 限制\nBox(\n    modifier = Modifier\n        .size(48.dp)\n        .clickable { onClick() }\n        .padding(8.dp)\n        .background(Color.Blue)\n)\n```\n\n## 标准顺序\n\n`size → padding → background → clip → clickable → semantics`\n\n## 常见陷阱\n\n1. `clickable` 在 `padding` 后 → 点击区域缩小\n2. `background` 在 `padding` 前 → padding 区域无背景色\n3. `clip` 在 `shadow` 后 → 阴影被裁剪",
+    "author": "Zhao Liu",
+    "publishDate": "2025-05-02",
+    "tags": ["Compose", "UI", "Modifier"]
+  },
+  {
+    "id": "5",
+    "title": "Version Catalog：告别散落版本号",
+    "summary": "Gradle Version Catalog 让你的多模块项目告别硬编码版本号，统一管理所有依赖。",
+    "content": "# Version Catalog\n\n## 为什么需要\n\n多模块项目中，版本号散落在各处 `build.gradle.kts` 是灾难：\n- 改一个库版本要搜遍所有模块\n- 不同模块可能引用不同版本的同一个库\n\n## 基本结构\n\n`gradle/libs.versions.toml`：\n\n```toml\n[versions]\nkotlin = \"2.0.21\"\ncomposeBom = \"2025.02.00\"\n\n[libraries]\ncompose-bom = { group = \"androidx.compose\", name = \"compose-bom\", version.ref = \"composeBom\" }\n\n[plugins]\nkotlin-android = { id = \"org.jetbrains.kotlin.android\", version.ref = \"kotlin\" }\n```\n\n## 使用方式\n\n```kotlin\ndependencies {\n    implementation(platform(libs.compose.bom))\n    implementation(libs.compose.ui)\n}\n```\n\n## 禁止硬编码\n\n**所有版本号只写在 `libs.versions.toml`**，子模块禁止硬编码。\n\n即使临时测试，也用注释标注例外。",
+    "author": "Sun Qi",
+    "publishDate": "2025-04-28",
+    "tags": ["Gradle", "构建", "VersionCatalog"]
+  },
+  {
+    "id": "6",
+    "title": "Navigation Compose 类型安全路由",
+    "summary": "告别字符串拼写错误，使用类型安全路由让导航在编译期就能发现问题。",
+    "content": "# Navigation Compose 类型安全路由\n\n## 传统方式的问题\n\n```kotlin\n// ❌ 字符串拼写错误编译期不报错\nnavController.navigate(\"acticle/1\")\n```\n\n## 类型安全路由\n\n```kotlin\n@Serializable\ndata class ArticleRoute(val id: String)\n\nnavController.navigate(ArticleRoute(id = \"1\"))\n```\n\n## 参数传递\n\n```kotlin\ncomposable<ArticleRoute> { backStackEntry ->\n    val route: ArticleRoute = backStackEntry.toRoute()\n    ArticleScreen(articleId = route.id)\n}\n```\n\n## 实践建议\n\n1. 每个屏定义一个 Route 类\n2. 可选参数用默认值\n3. 复杂数据结构用 JSON 序列化后传字符串\n4. 不要试图传 Parcelable 对象（非最佳实践）",
+    "author": "Zhou Ba",
+    "publishDate": "2025-04-25",
+    "tags": ["Navigation", "Compose", "路由"]
+  },
+  {
+    "id": "7",
+    "title": "sealed class when 穷尽性检查",
+    "summary": "利用 Kotlin sealed class 的编译期穷尽性检查，消除隐藏的未处理分支 Bug。",
+    "content": "# sealed class when 穷尽性检查\n\n## 为什么用 sealed\n\n```kotlin\nsealed interface UiState {\n    data object Loading : UiState\n    data class Success(val data: List<Article>) : UiState\n    data class Error(val message: String) : UiState\n}\n\n// 编译期强制处理所有分支\nwhen (state) {\n    is UiState.Loading -> LoadingIndicator()\n    is UiState.Success -> ArticleList(state.data)\n    is UiState.Error -> ErrorView(state.message)\n}\n```\n\n## 禁止使用 else\n\n```kotlin\n// ❌ 逃避检查\nwhen (action) {\n    is Action.Click -> handleClick()\n    else -> {} // 新增 Action 分支不报错\n}\n\n// ✅ 穷尽处理\nwhen (action) {\n    is Action.Click -> handleClick()\n    is Action.LongPress -> handleLongPress()\n}\n```\n\n新增 Action 子类后，编译器自动标记 `when` 不完整，强制你处理新分支。",
+    "author": "Wu Jiu",
+    "publishDate": "2025-04-22",
+    "tags": ["Kotlin", "sealed", "类型安全"]
+  },
+  {
+    "id": "8",
+    "title": "Android 多模块工程中 Manifest 合并冲突解决",
+    "summary": "Manifest 合并冲突是多模块项目的常态。学会 tools:replace、tools:remove 的正确姿势。",
+    "content": "# Manifest 合并冲突解决\n\n## 常见冲突场景\n\n1. 多个模块声明了相同的 `android:theme`\n2. 第三方 SDK 声明了你不想要的权限\n3. Debug 和 Release 需要不同的 `exported` 配置\n\n## tools:replace\n\n```xml\n<!-- 替换冲突属性 -->\n<activity\n    android:name=\".MainActivity\"\n    android:exported=\"true\"\n    tools:replace=\"android:exported\" />\n```\n\n## tools:remove\n\n```xml\n<!-- 移除不需要的权限 -->\n<uses-permission\n    android:name=\"android.permission.ACCESS_FINE_LOCATION\"\n    tools:node=\"remove\" />\n```\n\n## 禁止行为\n\n1. 不要为了消除冲突删除第三方 SDK 的组件声明\n2. 不要用 `tools:node=\"replace\"` 整段替换 `<application>`\n3. Debug 配置不要泄漏到 Release Manifest",
+    "author": "Zheng Shi",
+    "publishDate": "2025-04-20",
+    "tags": ["Manifest", "构建", "多模块"]
+  },
+  {
+    "id": "9",
+    "title": "Coroutines Flow 在 Android 中的最佳实践",
+    "summary": "从 LiveData 迁移到 Flow，掌握 StateFlow、SharedFlow 的正确使用场景。",
+    "content": "# Coroutines Flow 最佳实践\n\n## StateFlow vs SharedFlow\n\n| 特性 | StateFlow | SharedFlow |\n|------|-----------|------------|\n| 持有状态 | 是 | 否 |\n| 新订阅者收到最新值 | 是 | 否（取决于 replay）|\n| 用途 | UI 状态 | 一次性事件 |\n\n## ViewModel 模式\n\n```kotlin\n@HiltViewModel\nclass FeedViewModel @Inject constructor(\n    private val observeArticles: ObserveArticlesUseCase\n) : ViewModel() {\n    private val _uiState = MutableStateFlow(FeedUiState())\n    val uiState: StateFlow<FeedUiState> = _uiState.asStateFlow()\n\n    init {\n        viewModelScope.launch {\n            observeArticles().collect { articles ->\n                _uiState.update { it.copy(articles = articles) }\n            }\n        }\n    }\n}\n```\n\n## 一次性事件\n\n使用 `Channel` 或 `SharedFlow(replay = 0)` 处理 Snackbar、导航等一次性事件。",
+    "author": "Chen Shiyi",
+    "publishDate": "2025-04-18",
+    "tags": ["Coroutines", "Flow", "ViewModel"]
+  },
+  {
+    "id": "10",
+    "title": "DataStore 替代 SharedPreferences 迁移指南",
+    "summary": "DataStore 提供协程安全的异步存储，是 SharedPreferences 的现代替代方案。",
+    "content": "# DataStore 迁移指南\n\n## 为什么不用 SharedPreferences\n\n- 同步 I/O 可能阻塞主线程导致 ANR\n- 不支持类型安全\n- 无错误处理机制\n\n## DataStore Preferences\n\n```kotlin\nval Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = \"settings\")\n\nclass SettingsRepository @Inject constructor(\n    @ApplicationContext private val context: Context\n) {\n    val themeMode: Flow<String> = context.dataStore.data.map { prefs ->\n        prefs[THEME_KEY] ?: \"system\"\n    }\n\n    suspend fun setTheme(mode: String) {\n        context.dataStore.edit { prefs ->\n            prefs[THEME_KEY] = mode\n        }\n    }\n\n    companion object {\n        val THEME_KEY = stringPreferencesKey(\"theme_mode\")\n    }\n}\n```\n\n## 迁移步骤\n\n1. 新增 DataStore 读写逻辑\n2. 一次性将 SharedPreferences 数据迁移到 DataStore\n3. 移除 SharedPreferences 代码\n4. 禁止新代码使用 SharedPreferences",
+    "author": "Lin Shier",
+    "publishDate": "2025-04-15",
+    "tags": ["DataStore", "存储", "迁移"]
+  }
+]
